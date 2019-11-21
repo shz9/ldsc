@@ -7,23 +7,24 @@ Shape convention is (n_snp, n_annot) for all classes.
 Last column = intercept.
 
 '''
-from __future__ import division
+
 import numpy as np
 import pandas as pd
 from scipy.stats import norm, chi2
-import jackknife as jk
-from irwls import IRWLS
+from . import jackknife as jk
+from .irwls import IRWLS
 from scipy.stats import t as tdist
 from collections import namedtuple
 np.seterr(divide='raise', invalid='raise')
 
-s = lambda x: remove_brackets(str(np.matrix(x)))
+
+def s(x): return remove_brackets(str(np.matrix(x)))
 
 
 def update_separators(s, ii):
     '''s are separators with ii masked. Returns unmasked separators.'''
     maplist = np.arange(len(ii))[np.squeeze(ii)]
-    mask_to_unmask = lambda i: maplist[i]
+    def mask_to_unmask(i): return maplist[i]
     t = np.apply_along_axis(mask_to_unmask, 0, s[1:-1])
     t = np.hstack(((0), t, (len(ii))))
     return t
@@ -182,9 +183,8 @@ class LD_Score_Regression(object):
             n1 = np.sum(step1_ii)
             self.twostep_filtered = n_snp - n1
             x1 = x[np.squeeze(step1_ii), :]
-            yp1, w1, N1, initial_w1 = map(
-                lambda a: a[step1_ii].reshape((n1, 1)), (yp, w, N, initial_w))
-            update_func1 = lambda a: self._update_func(
+            yp1, w1, N1, initial_w1 = [a[step1_ii].reshape((n1, 1)) for a in (yp, w, N, initial_w)]
+            def update_func1(a): return self._update_func(
                 a, x1, w1, N1, M_tot, Nbar, ii=step1_ii)
             step1_jknife = IRWLS(
                 x1, yp1, update_func1, n_blocks, slow=slow, w=initial_w1)
@@ -192,7 +192,7 @@ class LD_Score_Regression(object):
             yp = yp - step1_int
             x = remove_intercept(x)
             x_tot = remove_intercept(x_tot)
-            update_func2 = lambda a: self._update_func(
+            def update_func2(a): return self._update_func(
                 a, x_tot, w, N, M_tot, Nbar, step1_int)
             s = update_separators(step1_jknife.separators, step1_ii)
             step2_jknife = IRWLS(
@@ -207,7 +207,7 @@ class LD_Score_Regression(object):
             y = IRWLS._weight(yp, initial_w)
             jknife = jk.LstsqJackknifeFast(x, y, n_blocks)
         else:
-            update_func = lambda a: self._update_func(
+            def update_func(a): return self._update_func(
                 a, x_tot, w, N, M_tot, Nbar, intercept)
             jknife = IRWLS(
                 x, yp, update_func, n_blocks, slow=slow, w=initial_w)
@@ -393,7 +393,7 @@ class Hsq(LD_Score_Regression):
 
     def _overlap_output(self, category_names, overlap_matrix, M_annot, M_tot, print_coefficients):
         '''LD Score regression summary for overlapping categories.'''
-        overlap_matrix_prop = np.zeros([self.n_annot,self.n_annot])
+        overlap_matrix_prop = np.zeros([self.n_annot, self.n_annot])
         for i in range(self.n_annot):
             overlap_matrix_prop[i, :] = overlap_matrix[i, :] / M_annot
 
@@ -403,21 +403,23 @@ class Hsq(LD_Score_Regression):
             np.dot(np.dot(overlap_matrix_prop, self.prop_cov), overlap_matrix_prop.T))
         prop_hsq_overlap_se = np.sqrt(
             np.maximum(0, prop_hsq_overlap_var)).reshape((1, self.n_annot))
-        one_d_convert = lambda x: np.array(x).reshape(np.prod(x.shape))
+
+        def one_d_convert(x): return np.array(x).reshape(np.prod(x.shape))
         prop_M_overlap = M_annot / M_tot
         enrichment = prop_hsq_overlap / prop_M_overlap
         enrichment_se = prop_hsq_overlap_se / prop_M_overlap
-        overlap_matrix_diff = np.zeros([self.n_annot,self.n_annot])
+        overlap_matrix_diff = np.zeros([self.n_annot, self.n_annot])
         for i in range(self.n_annot):
-            if not M_tot == M_annot[0,i]:
-                overlap_matrix_diff[i, :] = overlap_matrix[i,:]/M_annot[0,i] - \
-                    (M_annot - overlap_matrix[i,:]) / (M_tot-M_annot[0,i])
+            if not M_tot == M_annot[0, i]:
+                overlap_matrix_diff[i, :] = overlap_matrix[i, :]/M_annot[0, i] - \
+                    (M_annot - overlap_matrix[i, :]) / (M_tot-M_annot[0, i])
 
-        diff_est = np.dot(overlap_matrix_diff,self.coef)
-        diff_cov = np.dot(np.dot(overlap_matrix_diff,self.coef_cov),overlap_matrix_diff.T)
+        diff_est = np.dot(overlap_matrix_diff, self.coef)
+        diff_cov = np.dot(np.dot(overlap_matrix_diff,
+                                 self.coef_cov), overlap_matrix_diff.T)
         diff_se = np.sqrt(np.diag(diff_cov))
-        diff_p = ['NA' if diff_se[i]==0 else 2*tdist.sf(abs(diff_est[i]/diff_se[i]),self.n_blocks) \
-            for i in range(self.n_annot)]
+        diff_p = ['NA' if diff_se[i] == 0 else 2*tdist.sf(abs(diff_est[i]/diff_se[i]), self.n_blocks)
+                  for i in range(self.n_annot)]
 
         df = pd.DataFrame({
             'Category': category_names,
@@ -426,20 +428,19 @@ class Hsq(LD_Score_Regression):
             'Prop._h2_std_error': one_d_convert(prop_hsq_overlap_se),
             'Enrichment': one_d_convert(enrichment),
             'Enrichment_std_error': one_d_convert(enrichment_se),
-            'Enrichment_p':diff_p,
+            'Enrichment_p': diff_p,
             'Coefficient': one_d_convert(self.coef),
             'Coefficient_std_error': self.coef_se,
             'Coefficient_z-score': one_d_convert(self.coef) / one_d_convert(self.coef_se)
         })
         if print_coefficients:
             df = df[['Category', 'Prop._SNPs', 'Prop._h2', 'Prop._h2_std_error',
-                    'Enrichment','Enrichment_std_error', 'Enrichment_p',
-                     'Coefficient', 'Coefficient_std_error','Coefficient_z-score']]
+                     'Enrichment', 'Enrichment_std_error', 'Enrichment_p',
+                     'Coefficient', 'Coefficient_std_error', 'Coefficient_z-score']]
         else:
             df = df[['Category', 'Prop._SNPs', 'Prop._h2', 'Prop._h2_std_error',
-                    'Enrichment','Enrichment_std_error', 'Enrichment_p']]
+                     'Enrichment', 'Enrichment_std_error', 'Enrichment_p']]
         return df
-
 
     def summary(self, ref_ld_colnames=None, P=None, K=None, overlap=False):
         '''Print summary of the LD Score Regression.'''
@@ -455,7 +456,7 @@ class Hsq(LD_Score_Regression):
         if self.n_annot > 1:
             if ref_ld_colnames is None:
                 ref_ld_colnames = ['CAT_' + str(i)
-                                   for i in xrange(self.n_annot)]
+                                   for i in range(self.n_annot)]
 
             out.append('Categories: ' + ' '.join(ref_ld_colnames))
 
@@ -479,10 +480,10 @@ class Hsq(LD_Score_Regression):
             if self.mean_chisq > 1:
                 if self.ratio < 0:
                     out.append(
-                      'Ratio < 0 (usually indicates GC correction).')
+                        'Ratio < 0 (usually indicates GC correction).')
                 else:
                     out.append(
-                      'Ratio: ' + s(self.ratio) + ' (' + s(self.ratio_se) + ')')
+                        'Ratio: ' + s(self.ratio) + ' (' + s(self.ratio_se) + ')')
             else:
                 out.append('Ratio: NA (mean chi^2 < 1)')
 
@@ -610,7 +611,7 @@ class Gencov(LD_Score_Regression):
             N2 = self.N2
 
         return self.weights(ld, w_ld, N1, N2, np.sum(M), self.hsq1, self.hsq2, rho_g,
-                         intercept, self.intercept_hsq1, self.intercept_hsq2, ii)
+                            intercept, self.intercept_hsq1, self.intercept_hsq2, ii)
 
     def _update_weights(self, ld, w_ld, sqrt_n1n2, M, rho_g, intercept, ii=None):
         '''Weight function with the same signature for Hsq and Gencov.'''
@@ -732,8 +733,8 @@ class RG(object):
                     'different from zero.')
             else:
                 out.append(
-                           'This often means that you have constrained' +
-                           ' the intercepts to the wrong values.')
+                    'This often means that you have constrained' +
+                    ' the intercepts to the wrong values.')
         else:
             out.append(
                 'Genetic Correlation: ' + s(self.rg_ratio) +

@@ -5,7 +5,7 @@ This module contains functions for parsing various ldsc-defined file formats.
 
 '''
 
-from __future__ import division
+
 import numpy as np
 import pandas as pd
 import os
@@ -60,9 +60,11 @@ def get_compression(fh):
 def read_cts(fh, match_snps):
     '''Reads files for --cts-bin.'''
     compression = get_compression(fh)
-    cts = read_csv(fh, compression=compression, header=None, names=['SNP', 'ANNOT'])
+    cts = read_csv(fh, compression=compression,
+                   header=None, names=['SNP', 'ANNOT'])
     if not series_eq(cts.SNP, match_snps):
-        raise ValueError('--cts-bin and the .bim file must have identical SNP columns.')
+        raise ValueError(
+            '--cts-bin and the .bim file must have identical SNP columns.')
 
     return cts.ANNOT.values
 
@@ -76,7 +78,8 @@ def sumstats(fh, alleles=False, dropna=True):
         usecols += ['A1', 'A2']
 
     try:
-        x = read_csv(fh, usecols=usecols, dtype=dtype_dict, compression=compression)
+        x = read_csv(fh, usecols=usecols, dtype=dtype_dict,
+                     compression=compression)
     except (AttributeError, ValueError) as e:
         raise ValueError('Improperly formatted sumstats file: ' + str(e.args))
 
@@ -93,7 +96,8 @@ def ldscore_fromlist(flist, num=None):
         y = ldscore(fh, num)
         if i > 0:
             if not series_eq(y.SNP, ldscore_array[0].SNP):
-                raise ValueError('LD Scores for concatenation must have identical SNP columns.')
+                raise ValueError(
+                    'LD Scores for concatenation must have identical SNP columns.')
             else:  # keep SNP column from only the first file
                 y = y.drop(['SNP'], axis=1)
 
@@ -114,7 +118,8 @@ def l2_parser(fh, compression):
 
 def annot_parser(fh, compression, frqfile_full=None, compression_frq=None):
     '''Parse annot files'''
-    df_annot = read_csv(fh, header=0, compression=compression).drop(['SNP','CHR', 'BP', 'CM'], axis=1, errors='ignore').astype(float)
+    df_annot = read_csv(fh, header=0, compression=compression).drop(
+        ['SNP', 'CHR', 'BP', 'CM'], axis=1, errors='ignore').astype(float)
     if frqfile_full is not None:
         df_frq = frq_parser(frqfile_full, compression_frq)
         df_annot = df_annot[(.95 > df_frq.FRQ) & (df_frq.FRQ > 0.05)]
@@ -135,26 +140,29 @@ def ldscore(fh, num=None):
     if num is not None:  # num files, e.g., one per chromosome
         first_fh = sub_chr(fh, 1) + suffix
         s, compression = which_compression(first_fh)
-        chr_ld = [l2_parser(sub_chr(fh, i) + suffix + s, compression) for i in xrange(1, num + 1)]
+        chr_ld = [l2_parser(sub_chr(fh, i) + suffix + s, compression)
+                  for i in range(1, num + 1)]
         x = pd.concat(chr_ld)  # automatically sorted by chromosome
     else:  # just one file
         s, compression = which_compression(fh + suffix)
         x = l2_parser(fh + suffix + s, compression)
 
-    x = x.sort_values(by=['CHR', 'BP']) # SEs will be wrong unless sorted
+    x = x.sort_values(by=['CHR', 'BP'])  # SEs will be wrong unless sorted
     x = x.drop(['CHR', 'BP'], axis=1).drop_duplicates(subset='SNP')
     return x
 
 
 def M(fh, num=None, N=2, common=False):
     '''Parses .l{N}.M files, split across num chromosomes. See docs/file_formats_ld.txt.'''
-    parsefunc = lambda y: [float(z) for z in open(y, 'r').readline().split()]
+    def parsefunc(y): return [float(z)
+                              for z in open(y, 'r').readline().split()]
     suffix = '.l' + str(N) + '.M'
     if common:
         suffix += '_5_50'
 
     if num is not None:
-        x = np.sum([parsefunc(sub_chr(fh, i) + suffix) for i in xrange(1, num + 1)], axis=0)
+        x = np.sum([parsefunc(sub_chr(fh, i) + suffix)
+                    for i in range(1, num + 1)], axis=0)
     else:
         x = parsefunc(fh + suffix)
 
@@ -190,7 +198,7 @@ def annot(fh_list, num=None, frqfile=None):
 
         y = []
         M_tot = 0
-        for chr in xrange(1, num + 1):
+        for chr in range(1, num + 1):
             if frqfile is not None:
                 df_annot_chr_list = [annot_parser(sub_chr(fh, chr) + annot_suffix[i], annot_compression[i],
                                                   sub_chr(frqfile, chr) + frq_suffix, frq_compression)
@@ -199,7 +207,8 @@ def annot(fh_list, num=None, frqfile=None):
                 df_annot_chr_list = [annot_parser(sub_chr(fh, chr) + annot_suffix[i], annot_compression[i])
                                      for i, fh in enumerate(fh_list)]
 
-            annot_matrix_chr_list = [np.matrix(df_annot_chr) for df_annot_chr in df_annot_chr_list]
+            annot_matrix_chr_list = [
+                np.matrix(df_annot_chr) for df_annot_chr in df_annot_chr_list]
             annot_matrix_chr = np.hstack(annot_matrix_chr_list)
             y.append(np.dot(annot_matrix_chr.T, annot_matrix_chr))
             M_tot += len(df_annot_chr_list[0])
@@ -207,7 +216,8 @@ def annot(fh_list, num=None, frqfile=None):
         x = sum(y)
     else:  # just one file
         for i, fh in enumerate(fh_list):
-            annot_s, annot_comp_single = which_compression(fh + annot_suffix[i])
+            annot_s, annot_comp_single = which_compression(
+                fh + annot_suffix[i])
             annot_suffix[i] += annot_s
             annot_compression.append(annot_comp_single)
 
@@ -257,7 +267,8 @@ def __ID_List_Factory__(colnames, keepcol, fname_end, header=None, usecols=None)
                 self.df.columns = self.__colnames__
 
             if self.__keepcol__ is not None:
-                self.IDList = self.df.iloc[:, [self.__keepcol__]].astype('object')
+                self.IDList = self.df.iloc[:, [
+                    self.__keepcol__]].astype('object')
 
         def loj(self, externalDf):
             '''Returns indices of those elements of self.IDList that appear in exernalDf.'''
@@ -273,7 +284,8 @@ def __ID_List_Factory__(colnames, keepcol, fname_end, header=None, usecols=None)
     return IDContainer
 
 
-PlinkBIMFile = __ID_List_Factory__(['CHR', 'SNP', 'CM', 'BP', 'A1', 'A2'], 1, '.bim', usecols=[0, 1, 2, 3, 4, 5])
+PlinkBIMFile = __ID_List_Factory__(
+    ['CHR', 'SNP', 'CM', 'BP', 'A1', 'A2'], 1, '.bim', usecols=[0, 1, 2, 3, 4, 5])
 PlinkFAMFile = __ID_List_Factory__(['IID'], 0, '.fam', usecols=[1])
 FilterFile = __ID_List_Factory__(['ID'], 0, None, usecols=[0])
 AnnotFile = __ID_List_Factory__(None, 2, None, header=0, usecols=None)

@@ -6,13 +6,13 @@ into memory and checking that the input makes sense. There is no math here. LD S
 regression is implemented in the regressions module.
 
 '''
-from __future__ import division
+
 import numpy as np
 import pandas as pd
 from scipy import stats
 import itertools as it
-import parse as ps
-import regressions as reg
+from . import parse as ps
+from . import regressions as reg
 import sys
 import traceback
 import copy
@@ -23,16 +23,16 @@ _N_CHR = 22
 # complementary bases
 COMPLEMENT = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
 # bases
-BASES = COMPLEMENT.keys()
+BASES = list(COMPLEMENT.keys())
 # true iff strand ambiguous
 STRAND_AMBIGUOUS = {''.join(x): x[0] == COMPLEMENT[x[1]]
                     for x in it.product(BASES, BASES)
                     if x[0] != x[1]}
 # SNPS we want to keep (pairs of alleles)
-VALID_SNPS = {x for x in map(lambda y: ''.join(y), it.product(BASES, BASES))
+VALID_SNPS = {x for x in [''.join(y) for y in it.product(BASES, BASES)]
               if x[0] != x[1] and not STRAND_AMBIGUOUS[x]}
 # T iff SNP 1 has the same alleles as SNP 2 (allowing for strand or ref allele flip).
-MATCH_ALLELES = {x for x in map(lambda y: ''.join(y), it.product(VALID_SNPS, VALID_SNPS))
+MATCH_ALLELES = {x for x in [''.join(y) for y in it.product(VALID_SNPS, VALID_SNPS)]
                  # strand and ref match
                  if ((x[0] == x[2]) and (x[1] == x[3])) or
                  # ref match, strand flip
@@ -93,7 +93,7 @@ def _read_annot(args, log):
                                                           'annot matrix', ps.annot, frqfile=args.frqfile)
         elif args.ref_ld_chr is not None:
             overlap_matrix, M_tot = _read_chr_split_files(args.ref_ld_chr, args.ref_ld, log,
-                                                      'annot matrix', ps.annot, frqfile=args.frqfile_chr)
+                                                          'annot matrix', ps.annot, frqfile=args.frqfile_chr)
     except Exception:
         log.log('Error parsing .annot file.')
         raise
@@ -220,9 +220,11 @@ def _print_delete_values(ldscore_reg, ofh, log):
     log.log('Printing block jackknife delete values to {F}.'.format(F=ofh))
     np.savetxt(ofh, ldscore_reg.tot_delete_values)
 
+
 def _print_part_delete_values(ldscore_reg, ofh, log):
     '''Prints partitioned block jackknife delete-k values'''
-    log.log('Printing partitioned block jackknife delete values to {F}.'.format(F=ofh))
+    log.log(
+        'Printing partitioned block jackknife delete values to {F}.'.format(F=ofh))
     np.savetxt(ofh, ldscore_reg.part_delete_values)
 
 
@@ -251,6 +253,7 @@ def _read_ld_sumstats(args, log, fh, alleles=False, dropna=True):
     ref_ld_cnames = ref_ld.columns[1:len(ref_ld.columns)]
     return M_annot, w_ld_cname, ref_ld_cnames, sumstats, novar_cols
 
+
 def cell_type_specific(args, log):
     '''Cell type specific analysis'''
     args = copy.deepcopy(args)
@@ -260,7 +263,7 @@ def cell_type_specific(args, log):
         args.intercept_h2 = 1
 
     M_annot_all_regr, w_ld_cname, ref_ld_cnames_all_regr, sumstats, novar_cols = \
-            _read_ld_sumstats(args, log, args.h2_cts)
+        _read_ld_sumstats(args, log, args.h2_cts)
     M_tot = np.sum(M_annot_all_regr)
     _check_ld_condnum(args, log, ref_ld_cnames_all_regr)
     _warn_length(log, sumstats)
@@ -276,38 +279,42 @@ def cell_type_specific(args, log):
     log.log('Removed {M} SNPs with chi^2 > {C} ({N} SNPs remain)'.format(
             C=chisq_max, N=np.sum(ii), M=n_snp-np.sum(ii)))
     n_snp = np.sum(ii)  # lambdas are late-binding, so this works
-    ref_ld_all_regr = np.array(sumstats[ref_ld_cnames_all_regr]).reshape((len(sumstats),-1))
+    ref_ld_all_regr = np.array(
+        sumstats[ref_ld_cnames_all_regr]).reshape((len(sumstats), -1))
     chisq = np.array(sumstats.Z**2)
     keep_snps = sumstats[['SNP']]
 
-    s = lambda x: np.array(x).reshape((n_snp, 1))
-    results_columns = ['Name', 'Coefficient', 'Coefficient_std_error', 'Coefficient_P_value']
+    def s(x): return np.array(x).reshape((n_snp, 1))
+    results_columns = ['Name', 'Coefficient',
+                       'Coefficient_std_error', 'Coefficient_P_value']
     results_data = []
     for (name, ct_ld_chr) in [x.split() for x in open(args.ref_ld_chr_cts).readlines()]:
         ref_ld_cts_allsnps = _read_chr_split_files(ct_ld_chr, None, log,
-                                   'cts reference panel LD Score', ps.ldscore_fromlist)
+                                                   'cts reference panel LD Score', ps.ldscore_fromlist)
         log.log('Performing regression.')
-        ref_ld_cts = np.array(pd.merge(keep_snps, ref_ld_cts_allsnps, on='SNP', how='left').ix[:,1:])
+        ref_ld_cts = np.array(
+            pd.merge(keep_snps, ref_ld_cts_allsnps, on='SNP', how='left').ix[:, 1:])
         if np.any(np.isnan(ref_ld_cts)):
-            raise ValueError ('Missing some LD scores from cts files. Are you sure all SNPs in ref-ld-chr are also in ref-ld-chr-cts')
+            raise ValueError(
+                'Missing some LD scores from cts files. Are you sure all SNPs in ref-ld-chr are also in ref-ld-chr-cts')
 
         ref_ld = np.hstack([ref_ld_cts, ref_ld_all_regr])
         M_cts = ps.M_fromlist(
-                _splitp(ct_ld_chr), _N_CHR, common=(not args.not_M_5_50))
+            _splitp(ct_ld_chr), _N_CHR, common=(not args.not_M_5_50))
         M_annot = np.hstack([M_cts, M_annot_all_regr])
         hsqhat = reg.Hsq(s(chisq), ref_ld, s(sumstats[w_ld_cname]), s(sumstats.N),
-                     M_annot, n_blocks=n_blocks, intercept=args.intercept_h2,
-                     twostep=None, old_weights=True)
+                         M_annot, n_blocks=n_blocks, intercept=args.intercept_h2,
+                         twostep=None, old_weights=True)
         coef, coef_se = hsqhat.coef[0], hsqhat.coef_se[0]
         results_data.append((name, coef, coef_se, stats.norm.sf(coef/coef_se)))
         if args.print_all_cts:
             for i in range(1, len(ct_ld_chr.split(','))):
                 coef, coef_se = hsqhat.coef[i], hsqhat.coef_se[i]
-                results_data.append((name+'_'+str(i), coef, coef_se, stats.norm.sf(coef/coef_se)))
+                results_data.append(
+                    (name+'_'+str(i), coef, coef_se, stats.norm.sf(coef/coef_se)))
 
-
-    df_results = pd.DataFrame(data = results_data, columns = results_columns)
-    df_results.sort_values(by = 'Coefficient_P_value', inplace=True)
+    df_results = pd.DataFrame(data=results_data, columns=results_columns)
+    df_results.sort_values(by='Coefficient_P_value', inplace=True)
     df_results.to_csv(args.out+'.cell_type_results.txt', sep='\t', index=False)
     log.log('Results printed to '+args.out+'.cell_type_results.txt')
 
@@ -316,8 +323,8 @@ def estimate_h2(args, log):
     '''Estimate h2 and partitioned h2.'''
     args = copy.deepcopy(args)
     if args.samp_prev is not None and args.pop_prev is not None:
-        args.samp_prev, args.pop_prev = map(
-            float, [args.samp_prev, args.pop_prev])
+        args.samp_prev, args.pop_prev = list(map(
+            float, [args.samp_prev, args.pop_prev]))
     if args.intercept_h2 is not None:
         args.intercept_h2 = float(args.intercept_h2)
     if args.no_intercept:
@@ -340,7 +347,7 @@ def estimate_h2(args, log):
         if args.chisq_max is None:
             chisq_max = max(0.001*sumstats.N.max(), 80)
 
-    s = lambda x: np.array(x).reshape((n_snp, 1))
+    def s(x): return np.array(x).reshape((n_snp, 1))
     chisq = s(sumstats.Z**2)
     if chisq_max is not None:
         ii = np.ravel(chisq < chisq_max)
@@ -352,7 +359,8 @@ def estimate_h2(args, log):
         chisq = chisq[ii].reshape((n_snp, 1))
 
     if args.two_step is not None:
-        log.log('Using two-step estimator with cutoff at {M}.'.format(M=args.two_step))
+        log.log(
+            'Using two-step estimator with cutoff at {M}.'.format(M=args.two_step))
 
     hsqhat = reg.Hsq(chisq, ref_ld, s(sumstats[w_ld_cname]), s(sumstats.N),
                      M_annot, n_blocks=n_blocks, intercept=args.intercept_h2,
@@ -364,12 +372,14 @@ def estimate_h2(args, log):
         _print_delete_values(hsqhat, args.out + '.delete', log)
         _print_part_delete_values(hsqhat, args.out + '.part_delete', log)
 
-    log.log(hsqhat.summary(ref_ld_cnames, P=args.samp_prev, K=args.pop_prev, overlap = args.overlap_annot))
+    log.log(hsqhat.summary(ref_ld_cnames, P=args.samp_prev,
+                           K=args.pop_prev, overlap=args.overlap_annot))
     if args.overlap_annot:
         overlap_matrix, M_tot = _read_annot(args, log)
 
         # overlap_matrix = overlap_matrix[np.array(~novar_cols), np.array(~novar_cols)]#np.logical_not
-        df_results = hsqhat._overlap_output(ref_ld_cnames, overlap_matrix, M_annot, M_tot, args.print_coefficients)
+        df_results = hsqhat._overlap_output(
+            ref_ld_cnames, overlap_matrix, M_annot, M_tot, args.print_coefficients)
         df_results.to_csv(args.out+'.results', sep="\t", index=False)
         log.log('Results printed to '+args.out+'.results')
 
@@ -381,16 +391,17 @@ def estimate_rg(args, log):
     args = copy.deepcopy(args)
     rg_paths, rg_files = _parse_rg(args.rg)
     n_pheno = len(rg_paths)
-    f = lambda x: _split_or_none(x, n_pheno)
-    args.intercept_h2, args.intercept_gencov, args.samp_prev, args.pop_prev = map(f,
-        (args.intercept_h2, args.intercept_gencov, args.samp_prev, args.pop_prev))
-    map(lambda x: _check_arg_len(x, n_pheno), ((args.intercept_h2, '--intercept-h2'),
-                                               (args.intercept_gencov, '--intercept-gencov'),
+    def f(x): return _split_or_none(x, n_pheno)
+    args.intercept_h2, args.intercept_gencov, args.samp_prev, args.pop_prev = list(map(f,
+                                                                                  (args.intercept_h2, args.intercept_gencov, args.samp_prev, args.pop_prev)))
+    list(map(lambda x: _check_arg_len(x, n_pheno), ((args.intercept_h2, '--intercept-h2'),
+                                               (args.intercept_gencov,
+                                                '--intercept-gencov'),
                                                (args.samp_prev, '--samp-prev'),
-                                               (args.pop_prev, '--pop-prev')))
+                                               (args.pop_prev, '--pop-prev'))))
     if args.no_intercept:
-        args.intercept_h2 = [1 for _ in xrange(n_pheno)]
-        args.intercept_gencov = [0 for _ in xrange(n_pheno)]
+        args.intercept_h2 = [1 for _ in range(n_pheno)]
+        args.intercept_gencov = [0 for _ in range(n_pheno)]
     p1 = rg_paths[0]
     out_prefix = args.out + rg_files[0]
     M_annot, w_ld_cname, ref_ld_cnames, sumstats, _ = _read_ld_sumstats(args, log, p1,
@@ -400,7 +411,8 @@ def estimate_rg(args, log):
     if n_annot == 1 and args.two_step is None and args.intercept_h2 is None:
         args.two_step = 30
     if args.two_step is not None:
-        log.log('Using two-step estimator with cutoff at {M}.'.format(M=args.two_step))
+        log.log(
+            'Using two-step estimator with cutoff at {M}.'.format(M=args.two_step))
 
     for i, p2 in enumerate(rg_paths[1:n_pheno]):
         log.log(
@@ -447,35 +459,39 @@ def _read_other_sumstats(args, log, p2, sumstats, ref_ld_cnames):
 
 def _get_rg_table(rg_paths, RG, args):
     '''Print a table of genetic correlations.'''
-    t = lambda attr: lambda obj: getattr(obj, attr, 'NA')
+    def t(attr): return lambda obj: getattr(obj, attr, 'NA')
     x = pd.DataFrame()
-    x['p1'] = [rg_paths[0] for i in xrange(1, len(rg_paths))]
+    x['p1'] = [rg_paths[0] for i in range(1, len(rg_paths))]
     x['p2'] = rg_paths[1:len(rg_paths)]
-    x['rg'] = map(t('rg_ratio'), RG)
-    x['se'] = map(t('rg_se'), RG)
-    x['z'] = map(t('z'), RG)
-    x['p'] = map(t('p'), RG)
+    x['rg'] = list(map(t('rg_ratio'), RG))
+    x['se'] = list(map(t('rg_se'), RG))
+    x['z'] = list(map(t('z'), RG))
+    x['p'] = list(map(t('p'), RG))
     if args.samp_prev is not None and \
             args.pop_prev is not None and \
             all((i is not None for i in args.samp_prev)) and \
             all((i is not None for it in args.pop_prev)):
 
-        c = map(lambda x, y: reg.h2_obs_to_liab(1, x, y), args.samp_prev[1:], args.pop_prev[1:])
-        x['h2_liab'] = map(lambda x, y: x * y, c, map(t('tot'), map(t('hsq2'), RG)))
-        x['h2_liab_se'] = map(lambda x, y: x * y, c, map(t('tot_se'), map(t('hsq2'), RG)))
+        c = list(map(lambda x, y: reg.h2_obs_to_liab(1, x, y),
+                args.samp_prev[1:], args.pop_prev[1:]))
+        x['h2_liab'] = list(map(lambda x, y: x * y, c,
+                           list(map(t('tot'), list(map(t('hsq2'), RG))))))
+        x['h2_liab_se'] = list(map(lambda x, y: x * y, c,
+                              list(map(t('tot_se'), list(map(t('hsq2'), RG))))))
     else:
-        x['h2_obs'] = map(t('tot'), map(t('hsq2'), RG))
-        x['h2_obs_se'] = map(t('tot_se'), map(t('hsq2'), RG))
+        x['h2_obs'] = list(map(t('tot'), list(map(t('hsq2'), RG))))
+        x['h2_obs_se'] = list(map(t('tot_se'), list(map(t('hsq2'), RG))))
 
-    x['h2_int'] = map(t('intercept'), map(t('hsq2'), RG))
-    x['h2_int_se'] = map(t('intercept_se'), map(t('hsq2'), RG))
-    x['gcov_int'] = map(t('intercept'), map(t('gencov'), RG))
-    x['gcov_int_se'] = map(t('intercept_se'), map(t('gencov'), RG))
+    x['h2_int'] = list(map(t('intercept'), list(map(t('hsq2'), RG))))
+    x['h2_int_se'] = list(map(t('intercept_se'), list(map(t('hsq2'), RG))))
+    x['gcov_int'] = list(map(t('intercept'), list(map(t('gencov'), RG))))
+    x['gcov_int_se'] = list(map(t('intercept_se'), list(map(t('gencov'), RG))))
     return x.to_string(header=True, index=False) + '\n'
 
 
 def _print_gencor(args, log, rghat, ref_ld_cnames, i, rg_paths, print_hsq1):
-    l = lambda x: x + ''.join(['-' for i in range(len(x.replace('\n', '')))])
+    def l(x): return x + \
+        ''.join(['-' for i in range(len(x.replace('\n', '')))])
     P = [args.samp_prev[0], args.samp_prev[i + 1]]
     K = [args.pop_prev[0], args.pop_prev[i + 1]]
     if args.samp_prev is None and args.pop_prev is None:
@@ -523,7 +539,7 @@ def _align_alleles(z, alleles):
 def _rg(sumstats, args, log, M_annot, ref_ld_cnames, w_ld_cname, i):
     '''Run the regressions.'''
     n_snp = len(sumstats)
-    s = lambda x: np.array(x).reshape((n_snp, 1))
+    def s(x): return np.array(x).reshape((n_snp, 1))
     if args.chisq_max is not None:
         ii = sumstats.Z1**2*sumstats.Z2**2 < args.chisq_max**2
         n_snp = np.sum(ii)  # lambdas are late binding, so this works
@@ -568,9 +584,9 @@ def _print_rg_cov(rghat, fh, log):
 
 def _split_or_none(x, n):
     if x is not None:
-        y = map(float, x.replace('N', '-').split(','))
+        y = list(map(float, x.replace('N', '-').split(',')))
     else:
-        y = [None for _ in xrange(n)]
+        y = [None for _ in range(n)]
     return y
 
 

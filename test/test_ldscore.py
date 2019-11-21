@@ -37,16 +37,16 @@ class test_bed(unittest.TestCase):
     def test_bed(self):
         bed = ld.PlinkBEDFile('test/plink_test/plink.bed', self.N, self.bim)
         # remove three monomorphic SNPs
-        print bed.geno
-        print bed.m
+        print(bed.geno)
+        print(bed.m)
         assert bed.m == 4
         # no individuals removed
-        print bed.n
+        print(bed.n)
         assert self.N == bed.n
         # 5 indivs * 4 polymorphic SNPs
-        print len(bed.geno)
+        print(len(bed.geno))
         assert len(bed.geno) == 64
-        print bed.freq
+        print(bed.freq)
         correct = np.array(
             [0.59999999999999998, 0.59999999999999998, 0.625, 0.625])
         assert np.all(bed.freq == correct)
@@ -77,7 +77,7 @@ class test_bed(unittest.TestCase):
                               keep_snps=keep_snps, keep_indivs=keep_indivs)
         assert bed.m == 1
         assert bed.n == 2
-        print bed.geno
+        print(bed.geno)
         assert bed.geno[0:4] == ba.bitarray('0001')
 
     @nose.tools.raises(ValueError)
@@ -96,7 +96,8 @@ class test_bed(unittest.TestCase):
 
     def test_nextSNPs(self):
         for b in [1, 2, 3]:
-            bed = ld.PlinkBEDFile('test/plink_test/plink.bed', self.N, self.bim)
+            bed = ld.PlinkBEDFile(
+                'test/plink_test/plink.bed', self.N, self.bim)
             x = bed.nextSNPs(b)
             assert x.shape == (5, b)
             assert np.all(np.abs(np.mean(x, axis=0)) < 0.01)
