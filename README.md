@@ -1,7 +1,11 @@
 
-# LDSC (LD SCore) `v1.0.1`
+# LDSC (LD SCore) `v1.0.1`; `python3`-compatible
 
-`ldsc` is a command line tool for estimating heritability and genetic correlation from GWAS summary statistics. `ldsc` also computes LD Scores.
+[![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)](https://www.python.org/downloads/release/python-360/)
+
+
+`ldsc` is a command line tool for estimating heritability and genetic correlation from GWAS summary statistics. `ldsc` also computes LD Scores. This version supports python3. **Note**: This code is not fully tested.
+
 
 ## Getting Started
 
