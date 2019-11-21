@@ -9,7 +9,7 @@
 
 In order to download `ldsc`, you should clone this repository via the commands
 ```  
-git clone https://github.com/bulik/ldsc.git
+git clone https://github.com/shz9/ldsc.git
 cd ldsc
 ```
 
@@ -46,7 +46,7 @@ remote: Counting objects: 3, done.
 remote: Compressing objects: 100% (3/3), done.
 remote: Total 3 (delta 0), reused 0 (delta 0), pack-reused 0
 Unpacking objects: 100% (3/3), done.
-From https://github.com/bulik/ldsc
+From https://github.com/shz9/ldsc
    95f4db3..a6a6b18  master     -> origin/master
 Updating 95f4db3..a6a6b18
 Fast-forward
